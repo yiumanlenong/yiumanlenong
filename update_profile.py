@@ -213,7 +213,7 @@ def fetch_stats():
         " { totalCommitContributions restrictedContributionsCount }"
         for y in range(joined_year, now_year + 1)
     )
-    contrib = graphql(f'query {{ user(login: "{USER}") {{ {yr_aliases} }} }}')["user"]
+    contrib = graphql(f'query {{ user(login: "{USER}") {{ {yr_aliases} }} }}', token=PRIV_TOKEN)["user"]
     commits = sum(
         v["totalCommitContributions"] + v["restrictedContributionsCount"]
         for v in contrib.values()
