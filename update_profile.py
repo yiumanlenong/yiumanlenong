@@ -161,9 +161,12 @@ ART = r"""
 
 """
 
-# two tokens by design: the Actions GITHUB_TOKEN yields the contribution-style
-# commit count (public + private activity), while a PAT (ACCESS_TOKEN secret)
-# sees private repos for the repo list and LOC walk. Either falls back to the other.
+# Two tokens by design:
+#   GITHUB_TOKEN - built-in Actions token, scoped to THIS repo only; it cannot see
+#                 the user's other private repos, so it only yields public data.
+#   ACCESS_TOKEN - PAT (repo scope) from the secret; required to read private repos
+#                 (repo list + LOC walk) AND to count private contributions.
+# PRIV_TOKEN prefers ACCESS_TOKEN; TOKEN falls back to GITHUB_TOKEN when no PAT is set.
 TOKEN = os.environ.get("GITHUB_TOKEN") or os.environ.get("ACCESS_TOKEN") or ""
 PRIV_TOKEN = os.environ.get("ACCESS_TOKEN") or TOKEN
 
