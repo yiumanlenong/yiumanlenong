@@ -16,7 +16,3 @@ Embedded firmware engineer
 - Learning: posture-recognition algorithms, 2.4G wireless communication, low-power design
 - Hobbies: running · cycling · coffee
 - Contact: yiumanlenong@qq.com
-
----
-
-The profile card is refreshed daily by GitHub Actions via `update_profile.py`. Add a repository secret `ACCESS_TOKEN` (a PAT with `repo` scope) to include private-repo stats; without it, only public data is used.
