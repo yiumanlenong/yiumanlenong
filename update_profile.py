@@ -6,6 +6,9 @@ import calendar
 import html
 import json
 import os
+import shutil
+import subprocess
+import tempfile
 import unicodedata
 import urllib.request
 from datetime import datetime, timezone
@@ -247,39 +250,74 @@ def fetch_stats():
     return stats
 
 
-LOC_QUERY = """
-query($owner: String!, $name: String!, $id: ID!, $cursor: String) {
-  repository(owner: $owner, name: $name) {
-    defaultBranchRef { target { ... on Commit {
-      history(first: 100, author: {id: $id}, after: $cursor) {
-        pageInfo { hasNextPage endCursor }
-        nodes { additions deletions }
-      }
-    } } }
-  }
-}"""
+# Count the lines of code that currently live on the default branch of each
+# owned (non-fork) repo, instead of the net add/delete diff of past commits.
+# We clone each repo shallowly and count non-blank lines in text (source)
+# files. This reflects "how much code you have right now" and never goes
+# negative. Vendored/build artifacts and binary blobs are skipped.
+SKIP_DIRS = {
+    ".git", "node_modules", "vendor", "__pycache__", ".venv", "venv",
+    "dist", "build", ".next", ".idea", ".vscode", "target", "out", "bin", "obj",
+}
+MAX_BYTES = 1_000_000  # skip files larger than 1 MB (generated/vendored blobs)
 
 
-def loc(repo_names, user_id):
-    # REST stats/contributors answers 202 forever to the Actions token,
-    # so walk own commits on the default branch via GraphQL instead.
-    add = rem = 0
-    for name in repo_names:
-        cursor = None
-        try:
-            while True:
-                ref = graphql(LOC_QUERY, {"owner": USER, "name": name, "id": user_id, "cursor": cursor}, token=PRIV_TOKEN)["repository"]["defaultBranchRef"]
-                if ref is None:
-                    break  # empty repo
-                h = ref["target"]["history"]
-                add += sum(n["additions"] for n in h["nodes"])
-                rem += sum(n["deletions"] for n in h["nodes"])
-                if not h["pageInfo"]["hasNextPage"]:
-                    break
-                cursor = h["pageInfo"]["endCursor"]
-        except Exception as e:
-            print(f"loc {name}: {e}")
-    return {"loc_add": add, "loc_del": rem, "loc": add - rem}
+def clone_repo(name, path):
+    # Use the PAT when available (needed for private repos); otherwise clone
+    # anonymously, which still works for public repos.
+    url = (
+        f"https://{PRIV_TOKEN}@github.com/{USER}/{name}.git"
+        if PRIV_TOKEN else f"https://github.com/{USER}/{name}.git"
+    )
+    subprocess.run(
+        ["git", "clone", "--depth", "1", url, path],
+        check=True, capture_output=True, timeout=180,
+    )
+
+
+def count_loc(root):
+    """Count non-blank lines across text (source) files under root."""
+    total = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for fn in filenames:
+            fp = os.path.join(dirpath, fn)
+            try:
+                size = os.path.getsize(fp)
+            except OSError:
+                continue
+            if size == 0 or size > MAX_BYTES:
+                continue
+            try:
+                with open(fp, "rb") as f:
+                    if b"\x00" in f.read(8000):
+                        continue  # binary file
+                with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                    total += sum(1 for line in f if line.strip())
+            except OSError:
+                continue
+    return total
+
+
+def loc(repo_names, user_id=None):
+    total = 0
+    breakdown = {}
+    tmp = tempfile.mkdtemp(prefix="loc-")
+    try:
+        for name in repo_names:
+            path = os.path.join(tmp, name)
+            try:
+                clone_repo(name, path)
+            except Exception as e:
+                print(f"loc clone {name}: {e}")
+                continue
+            c = count_loc(path)
+            breakdown[name] = c
+            total += c
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    print("loc breakdown:", breakdown)
+    return {"loc": total, "loc_breakdown": breakdown}
 
 
 def disp_width(s):
@@ -334,8 +372,7 @@ def info_lines(s):
         rule("GitHub Stats"),
         kv2("Repos", f"{s['repos']} {{Contributed: {s['contributed']}}}", "Stars", n(s["stars"])),
         kv2("Commits", n(s["commits"]), "Followers", n(s["followers"])),
-        [("Lines of Code: ", "k"), (n(s["loc"]), "v"), (" ( ", "d"),
-         (n(s["loc_add"]) + "++", "g"), (", ", "d"), (n(s["loc_del"]) + "--", "r"), (" )", "d")],
+        [("Lines of Code: ", "k"), (n(s["loc"]), "v")],
     ]
 
 
