@@ -12,7 +12,6 @@ Embedded firmware engineer
 
 ## About
 
-- Focus: embedded firmware (C) and front-end development
-- Learning: posture-recognition algorithms, 2.4G wireless communication, low-power design
+- Focus: embedded firmware (C)
 - Hobbies: running · cycling · coffee
 - Contact: yiumanlenong@qq.com
