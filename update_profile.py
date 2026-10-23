@@ -357,7 +357,6 @@ def info_lines(s):
         [],
         kv("OS", "Windows"),
         kv("Age", f"{by} years, {bm} months, {bd} days"),
-        kv("Host", "Shenzhen Jumper Medical Equipment Co.,Ltd"),
         kv("Kernel", "Embedded Firmware Engineer"),
         kv("IDE", "VS Code / CodeBuddy"),
         [],
